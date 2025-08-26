@@ -1,0 +1,44 @@
+# Arquivos de desenvolvimento
+node_modules
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Arquivos temporários
+.tmp
+.temp
+
+# Arquivos de IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# Arquivos de sistema
+.DS_Store
+Thumbs.db
+
+# Arquivos de teste
+test
+tests
+__tests__
+*.test.js
+*.spec.js
+
+# Arquivos de documentação
+README.md
+*.md
+docs
+
+# Scripts de desenvolvimento
+scripts
+examples
