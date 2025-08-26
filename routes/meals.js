@@ -93,7 +93,7 @@ router.get('/dashboard', async (req, res) => {
     const pool = await getConnection();
     
     const result = await pool.request()
-      .query(`
+      .query(`        
         SELECT 
           b.name as Usuario, 
           a.description as Refeicao,    
@@ -103,6 +103,7 @@ router.get('/dashboard', async (req, res) => {
         FROM meals a
         JOIN users b ON a.user_id = b.id
         JOIN meal_types c ON a.type_id = c.id
+		    WHERE cast(a.date_time as date) = cast(GETDATE() as date)
         ORDER BY a.date_time DESC
       `);
     
