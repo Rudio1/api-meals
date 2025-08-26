@@ -28,6 +28,9 @@ const { generateAccessToken, generateRefreshToken, verifyToken } = require('../u
  *         password:
  *           type: string
  *           description: Senha criptografada
+ *         themeSelected:
+ *           type: string
+ *           description: Tema selecionado pelo usuário (light/dark)
  *         created_at:
  *           type: string
  *           format: date-time
@@ -63,6 +66,8 @@ const { generateAccessToken, generateRefreshToken, verifyToken } = require('../u
  *               type: string
  *             email:
  *               type: string
+ *             themeSelected:
+ *               type: string
  *         tokens:
  *           type: object
  *           properties:
@@ -81,6 +86,17 @@ const { generateAccessToken, generateRefreshToken, verifyToken } = require('../u
  *         refresh_token:
  *           type: string
  *           description: Refresh token para renovar o access token
+ *     
+ *     UserEditRequest:
+ *       type: object
+ *       properties:
+ *         name:
+ *           type: string
+ *           description: Novo nome do usuário
+ *         themeSelected:
+ *           type: string
+ *           description: Novo tema selecionado (light/dark)
+ *           enum: [light, dark]
  */
 
 /**
@@ -149,9 +165,9 @@ router.post('/', async (req, res) => {
       .input('email', sql.NVarChar, email)
       .input('password', sql.NVarChar, hashedPassword)
       .query(`
-        INSERT INTO users (name, email, password, created_at, updated_at)
-        OUTPUT INSERTED.id, INSERTED.name, INSERTED.email, INSERTED.created_at, INSERTED.updated_at
-        VALUES (@name, @email, @password, GETDATE(), GETDATE())
+        INSERT INTO users (name, email, password, themeSelected, created_at, updated_at)
+        OUTPUT INSERTED.id, INSERTED.name, INSERTED.email, INSERTED.themeSelected, INSERTED.created_at, INSERTED.updated_at
+        VALUES (@name, @email, @password, 'light', GETDATE(), GETDATE())
       `);
     
     const newUser = result.recordset[0];
@@ -162,6 +178,7 @@ router.post('/', async (req, res) => {
         id: newUser.id,
         name: newUser.name,
         email: newUser.email,
+        themeSelected: newUser.themeSelected,
         created_at: newUser.created_at,
         updated_at: newUser.updated_at
       }
@@ -264,7 +281,8 @@ router.post('/login', async (req, res) => {
       user: {
         id: user.id,
         name: user.name,
-        email: user.email
+        email: user.email,
+        themeSelected: user.themeSelected
       },
       tokens: {
         access_token: accessToken,
@@ -275,6 +293,138 @@ router.post('/login', async (req, res) => {
     
   } catch (error) {
     console.error('Erro no login:', error);
+    res.status(500).json({ error: 'Erro interno do servidor' });
+  }
+});
+
+/**
+ * @swagger
+ * /api/users/edit:
+ *   put:
+ *     summary: Edita nome e tema do usuário
+ *     tags: [Users]
+ *     security:
+ *       - ApiKeyAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/UserEditRequest'
+ *     responses:
+ *       200:
+ *         description: Usuário atualizado com sucesso
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                 user:
+ *                   type: object
+ *                   properties:
+ *                     id:
+ *                       type: integer
+ *                     name:
+ *                       type: string
+ *                     email:
+ *                       type: string
+ *                     themeSelected:
+ *                       type: string
+ *                     updated_at:
+ *                       type: string
+ *                       format: date-time
+ *       400:
+ *         description: Dados inválidos
+ *       401:
+ *         description: API Key não fornecida
+ *       403:
+ *         description: API Key inválida
+ *       404:
+ *         description: Usuário não encontrado
+ *       500:
+ *         description: Erro interno do servidor
+ */
+router.put('/edit', async (req, res) => {
+  try {
+    const { name, themeSelected } = req.body;
+    
+    if (!name && !themeSelected) {
+      return res.status(400).json({ 
+        error: 'Pelo menos um campo deve ser fornecido (name ou themeSelected)' 
+      });
+    }
+    
+  
+    if (name && name.trim().length < 2) {
+      return res.status(400).json({ 
+        error: 'Nome deve ter pelo menos 2 caracteres' 
+      });
+    }
+    
+    const pool = await getConnection();
+    
+    const userId = req.query.user_id || req.body.user_id;
+    
+    if (!userId) {
+      return res.status(400).json({ 
+        error: 'user_id é obrigatório' 
+      });
+    }
+    
+    const userExists = await pool.request()
+      .input('user_id', sql.Int, userId)
+      .query('SELECT id, name, email, themeSelected FROM users WHERE id = @user_id');
+    
+    if (userExists.recordset.length === 0) {
+      return res.status(404).json({ error: 'Usuário não encontrado' });
+    }
+    
+    const currentUser = userExists.recordset[0];
+    
+    let updateFields = [];
+    let inputs = [];
+    
+    if (name !== undefined) {
+      updateFields.push('name = @name');
+      inputs.push({ name: 'name', type: sql.NVarChar, value: name.trim() });
+    }
+    
+    if (themeSelected !== undefined) {
+      updateFields.push('themeSelected = @themeSelected');
+      inputs.push({ name: 'themeSelected', type: sql.NVarChar, value: themeSelected });
+    }
+    
+    inputs.push({ name: 'user_id', type: sql.Int, value: userId });
+    
+    const request = pool.request();
+    inputs.forEach(input => {
+      request.input(input.name, input.type, input.value);
+    });
+    
+    const result = await request.query(`
+      UPDATE users 
+      SET ${updateFields.join(', ')}, updated_at = GETDATE()
+      OUTPUT INSERTED.id, INSERTED.name, INSERTED.email, INSERTED.themeSelected, INSERTED.updated_at
+      WHERE id = @user_id
+    `);
+    
+    const updatedUser = result.recordset[0];
+    
+    res.json({
+      message: 'Usuário atualizado com sucesso',
+      user: {
+        id: updatedUser.id,
+        name: updatedUser.name,
+        email: updatedUser.email,
+        themeSelected: updatedUser.themeSelected,
+        updated_at: updatedUser.updated_at
+      }
+    });
+    
+  } catch (error) {
+    console.error('Erro ao atualizar usuário:', error);
     res.status(500).json({ error: 'Erro interno do servidor' });
   }
 });
