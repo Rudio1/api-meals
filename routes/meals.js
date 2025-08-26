@@ -46,7 +46,77 @@ const { getConnection, sql } = require('../config/database');
  *             type_name:
  *               type: string
  *               description: Nome da categoria
+ *     
+ *     DashboardMeal:
+ *       type: object
+ *       properties:
+ *         Usuario:
+ *           type: string
+ *           description: Nome do usuário
+ *         Refeicao:
+ *           type: string
+ *           description: Descrição da refeição
+ *         Data:
+ *           type: string
+ *           description: Data e hora formatada (DD/MM/YYYY HH:MM:SS)
+ *         Tipo:
+ *           type: string
+ *           description: Nome da categoria da refeição
  */
+
+/**
+ * @swagger
+ * /api/meals/dashboard:
+ *   get:
+ *     summary: Dashboard com todas as refeições formatadas
+ *     tags: [Meals]
+ *     security:
+ *       - ApiKeyAuth: []
+ *     responses:
+ *       200:
+ *         description: Dashboard retornado com sucesso
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 $ref: '#/components/schemas/DashboardMeal'
+ *       401:
+ *         description: API Key não fornecida
+ *       403:
+ *         description: API Key inválida
+ *       500:
+ *         description: Erro interno do servidor
+ */
+router.get('/dashboard', async (req, res) => {
+  try {
+    const pool = await getConnection();
+    
+    const result = await pool.request()
+      .query(`
+        SELECT 
+          b.name as Usuario, 
+          a.description as Refeicao,    
+          CONVERT(VARCHAR(10), a.date_time, 103) + ' ' + 
+          CONVERT(VARCHAR(8), a.date_time, 108) AS Data,
+          c.name as Tipo 
+        FROM meals a
+        JOIN users b ON a.user_id = b.id
+        JOIN meal_types c ON a.type_id = c.id
+        ORDER BY a.date_time DESC
+      `);
+    
+    res.json({
+      message: 'Dashboard carregado com sucesso',
+      total_refeicoes: result.recordset.length,
+      data: result.recordset
+    });
+    
+  } catch (error) {
+    console.error('Erro ao carregar dashboard:', error);
+    res.status(500).json({ error: 'Erro interno do servidor' });
+  }
+});
 
 /**
  * @swagger
