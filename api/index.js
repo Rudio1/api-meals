@@ -4,6 +4,7 @@ const helmet = require('helmet');
 const swaggerUi = require('swagger-ui-express');
 const swaggerJsdoc = require('swagger-jsdoc');
 
+const { authenticateApiKey } = require('../middleware/auth');
 const usersRouter = require('../routes/users');
 const mealTypesRouter = require('../routes/meal-types');
 const mealsRouter = require('../routes/meals');
@@ -28,6 +29,21 @@ const swaggerOptions = {
         url: 'https://api-meals-git-main-guilhermerc.vercel.app',
         description: 'Servidor de Produção (Vercel)'
       }
+    ],
+    components: {
+      securitySchemes: {
+        ApiKeyAuth: {
+          type: 'apiKey',
+          in: 'header',
+          name: 'x-api-key',
+          description: 'API Key para autenticação'
+        }
+      }
+    },
+    security: [
+      {
+        ApiKeyAuth: []
+      }
     ]
   },
   apis: ['../routes/*.js']
@@ -41,7 +57,7 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Rota principal
+// Rota principal (sem autenticação para verificar se a API está funcionando)
 app.get('/', (req, res) => {
   res.json({
     message: 'Bem-vindo à API Meals no Vercel!',
@@ -51,19 +67,19 @@ app.get('/', (req, res) => {
       mealTypes: '/api/meal-types',
       meals: '/api/meals',
       swagger: '/api-docs'
-    }
+    },
+    note: 'Todas as rotas da API requerem o header x-api-key'
   });
 });
 
-// Rotas da API
+// Aplicar middleware de autenticação em todas as rotas da API
+app.use('/api', authenticateApiKey);
+
 app.use('/api/users', usersRouter);
 app.use('/api/meal-types', mealTypesRouter);
 app.use('/api/meals', mealsRouter);
+app.use('/api-docs', authenticateApiKey, swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
-// Documentação Swagger
-app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
-
-// Middleware de tratamento de erros
 app.use((err, req, res, next) => {
   console.error(err.stack);
   res.status(500).json({ 
@@ -72,12 +88,9 @@ app.use((err, req, res, next) => {
   });
 });
 
-// Rota para endpoints não encontrados
 app.use('*', (req, res) => {
   res.status(404).json({ error: 'Endpoint não encontrado' });
 });
 
-// Para o Vercel, não precisamos do app.listen()
-// O Vercel gerencia isso automaticamente
 
 module.exports = app;

@@ -25,6 +25,8 @@ const { getConnection, sql } = require('../config/database');
  *   get:
  *     summary: Lista todas as categorias de refeição
  *     tags: [Meal Types]
+ *     security:
+ *       - ApiKeyAuth: []
  *     responses:
  *       200:
  *         description: Lista de categorias retornada com sucesso
@@ -34,6 +36,10 @@ const { getConnection, sql } = require('../config/database');
  *               type: array
  *               items:
  *                 $ref: '#/components/schemas/MealType'
+ *       401:
+ *         description: API Key não fornecida
+ *       403:
+ *         description: API Key inválida
  *       500:
  *         description: Erro interno do servidor
  */
@@ -56,6 +62,8 @@ router.get('/', async (req, res) => {
  *   post:
  *     summary: Adiciona uma nova categoria de refeição
  *     tags: [Meal Types]
+ *     security:
+ *       - ApiKeyAuth: []
  *     requestBody:
  *       required: true
  *       content:
@@ -77,6 +85,10 @@ router.get('/', async (req, res) => {
  *               $ref: '#/components/schemas/MealType'
  *       400:
  *         description: Nome é obrigatório ou categoria já existe
+ *       401:
+ *         description: API Key não fornecida
+ *       403:
+ *         description: API Key inválida
  *       500:
  *         description: Erro interno do servidor
  */
@@ -123,6 +135,8 @@ router.post('/', async (req, res) => {
  *   delete:
  *     summary: Remove uma categoria de refeição
  *     tags: [Meal Types]
+ *     security:
+ *       - ApiKeyAuth: []
  *     parameters:
  *       - in: path
  *         name: id
@@ -135,6 +149,10 @@ router.post('/', async (req, res) => {
  *         description: Categoria removida com sucesso
  *       400:
  *         description: Não é possível remover categoria que está em uso
+ *       401:
+ *         description: API Key não fornecida
+ *       403:
+ *         description: API Key inválida
  *       404:
  *         description: Categoria não encontrada
  *       500:

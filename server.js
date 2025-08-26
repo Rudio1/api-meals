@@ -5,6 +5,7 @@ const swaggerUi = require('swagger-ui-express');
 const swaggerJsdoc = require('swagger-jsdoc');
 require('dotenv').config();
 
+const { authenticateApiKey } = require('./middleware/auth');
 const usersRouter = require('./routes/users');
 const mealTypesRouter = require('./routes/meal-types');
 const mealsRouter = require('./routes/meals');
@@ -30,6 +31,21 @@ const swaggerOptions = {
         url: `http://localhost:${PORT}`,
         description: 'Servidor de Desenvolvimento'
       }
+    ],
+    components: {
+      securitySchemes: {
+        ApiKeyAuth: {
+          type: 'apiKey',
+          in: 'header',
+          name: 'x-api-key',
+          description: 'API Key para autenticação'
+        }
+      }
+    },
+    security: [
+      {
+        ApiKeyAuth: []
+      }
     ]
   },
   apis: ['./routes/*.js']
@@ -43,7 +59,6 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Rota principal
 app.get('/', (req, res) => {
   res.json({
     message: 'Bem-vindo à API Meals!',
@@ -53,18 +68,18 @@ app.get('/', (req, res) => {
       mealTypes: '/api/meal-types',
       meals: '/api/meals',
       swagger: '/api-docs'
-    }
+    },
+    note: 'Todas as rotas da API requerem o header x-api-key'
   });
 });
 
-// Rotas da API
+// Aplicar middleware de autenticação em todas as rotas da API
+app.use('/api', authenticateApiKey);
 app.use('/api/users', usersRouter);
 app.use('/api/meal-types', mealTypesRouter);
 app.use('/api/meals', mealsRouter);
-//
 
-
-app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+app.use('/api-docs', authenticateApiKey, swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 app.use((err, req, res, next) => {
   console.error(err.stack);
@@ -79,13 +94,13 @@ app.use('*', (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`🚀 Servidor rodando na porta ${PORT}`);
-  console.log(`📚 Documentação Swagger disponível em: http://localhost:${PORT}/api-docs`);
-  console.log(`👥 Usuários: http://localhost:${PORT}/api/users`);
-  console.log(`🏷️  Categorias: http://localhost:${PORT}/api/meal-types`);
-  console.log(`🍽️  Refeições: http://localhost:${PORT}/api/meals`);
+  console.log(`Servidor rodando na porta ${PORT}`);
+  console.log(`Documentação Swagger disponível em: http://localhost:${PORT}/api-docs`);
+  console.log(`Usuários: http://localhost:${PORT}/api/users`);
+  console.log(`Categorias: http://localhost:${PORT}/api/meal-types`);
+  console.log(`Refeições: http://localhost:${PORT}/api/meals`);
+  console.log(`Todas as rotas da API requerem o header x-api-key`);
 });
-
 
 process.on('SIGINT', () => {
   console.log('\n🛑 Encerrando servidor...');

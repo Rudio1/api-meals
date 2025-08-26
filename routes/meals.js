@@ -54,6 +54,8 @@ const { getConnection, sql } = require('../config/database');
  *   get:
  *     summary: Lista todas as refeições com detalhes
  *     tags: [Meals]
+ *     security:
+ *       - ApiKeyAuth: []
  *     responses:
  *       200:
  *         description: Lista de refeições retornada com sucesso
@@ -63,6 +65,10 @@ const { getConnection, sql } = require('../config/database');
  *               type: array
  *               items:
  *                 $ref: '#/components/schemas/MealWithDetails'
+ *       401:
+ *         description: API Key não fornecida
+ *       403:
+ *         description: API Key inválida
  *       500:
  *         description: Erro interno do servidor
  */
@@ -94,6 +100,8 @@ router.get('/', async (req, res) => {
  *   get:
  *     summary: Busca uma refeição por ID
  *     tags: [Meals]
+ *     security:
+ *       - ApiKeyAuth: []
  *     parameters:
  *       - in: path
  *         name: id
@@ -108,6 +116,10 @@ router.get('/', async (req, res) => {
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/MealWithDetails'
+ *       401:
+ *         description: API Key não fornecida
+ *       403:
+ *         description: API Key inválida
  *       404:
  *         description: Refeição não encontrada
  *       500:
@@ -147,6 +159,8 @@ router.get('/:id', async (req, res) => {
  *   post:
  *     summary: Cria uma nova refeição
  *     tags: [Meals]
+ *     security:
+ *       - ApiKeyAuth: []
  *     requestBody:
  *       required: true
  *       content:
@@ -181,6 +195,10 @@ router.get('/:id', async (req, res) => {
  *               $ref: '#/components/schemas/Meal'
  *       400:
  *         description: Dados inválidos
+ *       401:
+ *         description: API Key não fornecida
+ *       403:
+ *         description: API Key inválida
  *       500:
  *         description: Erro interno do servidor
  */
@@ -236,6 +254,8 @@ router.post('/', async (req, res) => {
  *   put:
  *     summary: Atualiza uma refeição existente
  *     tags: [Meals]
+ *     security:
+ *       - ApiKeyAuth: []
  *     parameters:
  *       - in: path
  *         name: id
@@ -264,6 +284,12 @@ router.post('/', async (req, res) => {
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/Meal'
+ *       400:
+ *         description: Dados inválidos
+ *       401:
+ *         description: API Key não fornecida
+ *       403:
+ *         description: API Key inválida
  *       404:
  *         description: Refeição não encontrada
  *       500:
@@ -343,6 +369,8 @@ router.put('/:id', async (req, res) => {
  *   delete:
  *     summary: Remove uma refeição
  *     tags: [Meals]
+ *     security:
+ *       - ApiKeyAuth: []
  *     parameters:
  *       - in: path
  *         name: id
@@ -353,6 +381,10 @@ router.put('/:id', async (req, res) => {
  *     responses:
  *       200:
  *         description: Refeição removida com sucesso
+ *       401:
+ *         description: API Key não fornecida
+ *       403:
+ *         description: API Key inválida
  *       404:
  *         description: Refeição não encontrada
  *       500:

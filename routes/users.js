@@ -55,6 +55,8 @@ const bcrypt = require('bcrypt');
  *   post:
  *     summary: Cria um novo usuário
  *     tags: [Users]
+ *     security:
+ *       - ApiKeyAuth: []
  *     requestBody:
  *       required: true
  *       content:
@@ -70,6 +72,10 @@ const bcrypt = require('bcrypt');
  *               $ref: '#/components/schemas/User'
  *       400:
  *         description: Dados inválidos ou email já existe
+ *       401:
+ *         description: API Key não fornecida
+ *       403:
+ *         description: API Key inválida
  *       500:
  *         description: Erro interno do servidor
  */
@@ -139,6 +145,8 @@ router.post('/', async (req, res) => {
  *   post:
  *     summary: Faz login do usuário
  *     tags: [Users]
+ *     security:
+ *       - ApiKeyAuth: []
  *     requestBody:
  *       required: true
  *       content:
@@ -160,7 +168,9 @@ router.post('/', async (req, res) => {
  *       400:
  *         description: Dados inválidos
  *       401:
- *         description: Email ou senha incorretos
+ *         description: Email ou senha incorretos ou API Key não fornecida
+ *       403:
+ *         description: API Key inválida
  *       500:
  *         description: Erro interno do servidor
  */
