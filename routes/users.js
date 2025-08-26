@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { getConnection, sql } = require('../config/database');
 const bcrypt = require('bcrypt');
+const { generateAccessToken, generateRefreshToken, verifyToken } = require('../utils/jwt');
 
 /**
  * @swagger
@@ -47,6 +48,39 @@ const bcrypt = require('bcrypt');
  *           format: email
  *         password:
  *           type: string
+ *     
+ *     LoginResponse:
+ *       type: object
+ *       properties:
+ *         message:
+ *           type: string
+ *         user:
+ *           type: object
+ *           properties:
+ *             id:
+ *               type: integer
+ *             name:
+ *               type: string
+ *             email:
+ *               type: string
+ *         tokens:
+ *           type: object
+ *           properties:
+ *             access_token:
+ *               type: string
+ *             refresh_token:
+ *               type: string
+ *             expires_in:
+ *               type: integer
+ *     
+ *     RefreshTokenRequest:
+ *       type: object
+ *       required:
+ *         - refresh_token
+ *       properties:
+ *         refresh_token:
+ *           type: string
+ *           description: Refresh token para renovar o access token
  */
 
 /**
@@ -159,12 +193,7 @@ router.post('/', async (req, res) => {
  *         content:
  *           application/json:
  *             schema:
- *               type: object
- *               properties:
- *                 message:
- *                   type: string
- *                 user:
- *                   $ref: '#/components/schemas/User'
+ *               $ref: '#/components/schemas/LoginResponse'
  *       400:
  *         description: Dados inválidos
  *       401:
@@ -205,19 +234,137 @@ router.post('/login', async (req, res) => {
       });
     }
     
+    const accessToken = generateAccessToken({ 
+      id: user.id, 
+      email: user.email 
+    });
+    
+    const refreshToken = generateRefreshToken({ 
+      id: user.id, 
+      email: user.email 
+    });
+    
+    const refreshExpiresIn = parseInt(process.env.JWT_REFRESH_EXPIRES_IN)
+    const refreshExpiresAt = new Date(Date.now() + (refreshExpiresIn * 1000));
+
+    await pool.request()
+      .input('user_id', sql.Int, user.id)
+      .input('refresh_token', sql.NVarChar, refreshToken)
+      .input('refresh_token_expires_at', sql.DateTime, refreshExpiresAt)
+      .query(`
+        UPDATE users 
+        SET refresh_token = @refresh_token, 
+            refresh_token_expires_at = @refresh_token_expires_at,
+            updated_at = GETDATE()
+        WHERE id = @user_id
+      `);
+    
     res.json({
       message: 'Login realizado com sucesso',
       user: {
         id: user.id,
         name: user.name,
-        email: user.email,
-        created_at: user.created_at,
-        updated_at: user.updated_at
+        email: user.email
+      },
+      tokens: {
+        access_token: accessToken,
+        refresh_token: refreshToken,
+        expires_in: parseInt(process.env.JWT_ACCESS_EXPIRES_IN) || 3600
       }
     });
     
   } catch (error) {
     console.error('Erro no login:', error);
+    res.status(500).json({ error: 'Erro interno do servidor' });
+  }
+});
+
+/**
+ * @swagger
+ * /api/users/refresh:
+ *   post:
+ *     summary: Renova o access token usando refresh token
+ *     tags: [Users]
+ *     security:
+ *       - ApiKeyAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/RefreshTokenRequest'
+ *     responses:
+ *       200:
+ *         description: Token renovado com sucesso
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                 access_token:
+ *                   type: string
+ *                 expires_in:
+ *                   type: integer
+ *       400:
+ *         description: Refresh token não fornecido
+ *       401:
+ *         description: Refresh token inválido ou expirado
+ *       500:
+ *         description: Erro interno do servidor
+ */
+router.post('/refresh', async (req, res) => {
+  try {
+    const { refresh_token } = req.body;
+    
+    if (!refresh_token) {
+      return res.status(400).json({ 
+        error: 'Refresh token é obrigatório' 
+      });
+    }
+    
+    const decoded = verifyToken(refresh_token);
+    if (!decoded) {
+      return res.status(401).json({ 
+        error: 'Refresh token inválido' 
+      });
+    }
+    
+    const pool = await getConnection();
+    
+    const result = await pool.request()
+      .input('user_id', sql.Int, decoded.id)
+      .input('refresh_token', sql.NVarChar, refresh_token)
+      .query(`
+        SELECT id, name, email, refresh_token_expires_at 
+        FROM users 
+        WHERE id = @user_id 
+        AND refresh_token = @refresh_token
+        AND refresh_token_expires_at > GETDATE()
+      `);
+    
+    if (result.recordset.length === 0) {
+      return res.status(401).json({ 
+        error: 'Refresh token inválido ou expirado' 
+      });
+    }
+    
+    const user = result.recordset[0];
+    
+    const newAccessToken = generateAccessToken({ 
+      id: user.id, 
+      email: user.email 
+    });
+    
+    res.json({
+      message: 'Token renovado com sucesso',
+      access_token: newAccessToken,
+      expires_in: parseInt(process.env.JWT_ACCESS_EXPIRES_IN) || 3600
+    });
+    
+  } catch (error) {
+    console.error('Erro ao renovar token:', error);
     res.status(500).json({ error: 'Erro interno do servidor' });
   }
 });
