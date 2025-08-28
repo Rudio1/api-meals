@@ -2,92 +2,6 @@ const express = require('express');
 const router = express.Router();
 const { getConnection, sql } = require('../config/database');
 
-/**
- * @swagger
- * components:
- *   schemas:
- *     Meal:
- *       type: object
- *       required:
- *         - user_id
- *         - type_id
- *         - description
- *         - date_time
- *       properties:
- *         id:
- *           type: integer
- *           description: ID único da refeição
- *         user_id:
- *           type: integer
- *           description: ID do usuário que criou a refeição
- *         type_id:
- *           type: integer
- *           description: ID da categoria da refeição
- *         description:
- *           type: string
- *           description: Descrição da refeição
- *         date_time:
- *           type: string
- *           format: date-time
- *           description: Data e hora da refeição
- *         created_at:
- *           type: string
- *           format: date-time
- *           description: Data de criação do registro
- *     
- *     MealWithDetails:
- *       allOf:
- *         - $ref: '#/components/schemas/Meal'
- *         - type: object
- *           properties:
- *             user_name:
- *               type: string
- *               description: Nome do usuário
- *             type_name:
- *               type: string
- *               description: Nome da categoria
- *     
- *     DashboardMeal:
- *       type: object
- *       properties:
- *         Usuario:
- *           type: string
- *           description: Nome do usuário
- *         Refeicao:
- *           type: string
- *           description: Descrição da refeição
- *         Data:
- *           type: string
- *           description: Data e hora formatada (DD/MM/YYYY HH:MM:SS)
- *         Tipo:
- *           type: string
- *           description: Nome da categoria da refeição
- */
-
-/**
- * @swagger
- * /api/meals/dashboard:
- *   get:
- *     summary: Dashboard com todas as refeições formatadas
- *     tags: [Meals]
- *     security:
- *       - ApiKeyAuth: []
- *     responses:
- *       200:
- *         description: Dashboard retornado com sucesso
- *         content:
- *           application/json:
- *             schema:
- *               type: array
- *               items:
- *                 $ref: '#/components/schemas/DashboardMeal'
- *       401:
- *         description: API Key não fornecida
- *       403:
- *         description: API Key inválida
- *       500:
- *         description: Erro interno do servidor
- */
 router.get('/dashboard', async (req, res) => {
   try {
     const pool = await getConnection();
@@ -99,11 +13,16 @@ router.get('/dashboard', async (req, res) => {
           a.description as Refeicao,    
           CONVERT(VARCHAR(10), a.date_time, 103) + ' ' + 
           CONVERT(VARCHAR(8), a.date_time, 108) AS Data,
-          c.name as Tipo 
+          c.name as Tipo,
+          d.item_name as NomeItem,
+          d.quantity as Quantidade,
+          e.name as Medida
         FROM meals a
         JOIN users b ON a.user_id = b.id
         JOIN meal_types c ON a.type_id = c.id
-		    WHERE cast(a.date_time as date) = cast(GETDATE() as date)
+        JOIN meal_items d ON a.id = d.meal_id
+        JOIN measurement_units e ON d.unit_id = e.id
+        WHERE cast(a.date_time as date) = cast(GETDATE() as date)
         ORDER BY a.date_time DESC
       `);
     
@@ -119,50 +38,6 @@ router.get('/dashboard', async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /api/meals/filter-by-date:
- *   get:
- *     summary: Filtra refeições por data específica
- *     tags: [Meals]
- *     security:
- *       - ApiKeyAuth: []
- *     parameters:
- *       - in: query
- *         name: date
- *         required: true
- *         schema:
- *           type: string
- *           format: date
- *           example: "2025-08-26"
- *         description: Data para filtrar as refeições (formato YYYY-MM-DD)
- *     responses:
- *       200:
- *         description: Refeições filtradas por data retornadas com sucesso
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 message:
- *                   type: string
- *                   description: Mensagem de sucesso
- *                 total_refeicoes:
- *                   type: integer
- *                   description: Total de refeições encontradas para a data
- *                 data:
- *                   type: array
- *                   items:
- *                     $ref: '#/components/schemas/DashboardMeal'
- *       400:
- *         description: Data não fornecida ou formato inválido
- *       401:
- *         description: API Key não fornecida
- *       403:
- *         description: API Key inválida
- *       500:
- *         description: Erro interno do servidor
- */
 router.get('/filter-by-date', async (req, res) => {
   try {
     const { date } = req.query;
@@ -173,7 +48,6 @@ router.get('/filter-by-date', async (req, res) => {
       });
     }
     
-    // Validação básica do formato da data
     const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
     if (!dateRegex.test(date)) {
       return res.status(400).json({ 
@@ -191,10 +65,15 @@ router.get('/filter-by-date', async (req, res) => {
           a.description as Refeicao,    
           CONVERT(VARCHAR(10), a.date_time, 103) + ' ' + 
           CONVERT(VARCHAR(8), a.date_time, 108) AS Data,
-          c.name as Tipo 
+          c.name as Tipo,
+          d.item_name as NomeItem,
+          d.quantity as Quantidade,
+          e.name as Medida
         FROM meals a
         JOIN users b ON a.user_id = b.id
         JOIN meal_types c ON a.type_id = c.id
+        JOIN meal_items d ON a.id = d.meal_id
+        JOIN measurement_units e ON d.unit_id = e.id
         WHERE cast(a.date_time as date) = @date
         ORDER BY a.date_time DESC
       `);
@@ -211,34 +90,11 @@ router.get('/filter-by-date', async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /api/meals:
- *   get:
- *     summary: Lista todas as refeições com detalhes
- *     tags: [Meals]
- *     security:
- *       - ApiKeyAuth: []
- *     responses:
- *       200:
- *         description: Lista de refeições retornada com sucesso
- *         content:
- *           application/json:
- *             schema:
- *               type: array
- *               items:
- *                 $ref: '#/components/schemas/MealWithDetails'
- *       401:
- *         description: API Key não fornecida
- *       403:
- *         description: API Key inválida
- *       500:
- *         description: Erro interno do servidor
- */
 router.get('/', async (req, res) => {
   try {
     const pool = await getConnection();
-    const result = await pool.request()
+    
+    const mealsResult = await pool.request()
       .query(`
         SELECT 
           m.*,
@@ -250,49 +106,39 @@ router.get('/', async (req, res) => {
         ORDER BY m.date_time DESC
       `);
     
-    res.json(result.recordset);
+    const mealsWithItems = [];
+    for (const meal of mealsResult.recordset) {
+      const itemsResult = await pool.request()
+        .input('meal_id', sql.Int, meal.id)
+        .query(`
+          SELECT 
+            mi.*,
+            mu.name as unit_name
+          FROM meal_items mi
+          INNER JOIN measurement_units mu ON mi.unit_id = mu.id
+          WHERE mi.meal_id = @meal_id
+          ORDER BY mi.id
+        `);
+      
+      mealsWithItems.push({
+        ...meal,
+        items: itemsResult.recordset
+      });
+    }
+    
+    res.json(mealsWithItems);
   } catch (error) {
     console.error('Erro ao buscar refeições:', error);
     res.status(500).json({ error: 'Erro interno do servidor' });
   }
 });
 
-/**
- * @swagger
- * /api/meals/{id}:
- *   get:
- *     summary: Busca uma refeição por ID
- *     tags: [Meals]
- *     security:
- *       - ApiKeyAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: integer
- *         description: ID da refeição
- *     responses:
- *       200:
- *         description: Refeição encontrada
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/MealWithDetails'
- *       401:
- *         description: API Key não fornecida
- *       403:
- *         description: API Key inválida
- *       404:
- *         description: Refeição não encontrada
- *       500:
- *         description: Erro interno do servidor
- */
 router.get('/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const pool = await getConnection();
-    const result = await pool.request()
+    
+    const mealResult = await pool.request()
       .input('id', sql.Int, id)
       .query(`
         SELECT 
@@ -305,73 +151,39 @@ router.get('/:id', async (req, res) => {
         WHERE m.id = @id
       `);
     
-    if (result.recordset.length === 0) {
+    if (mealResult.recordset.length === 0) {
       return res.status(404).json({ error: 'Refeição não encontrada' });
     }
     
-    res.json(result.recordset[0]);
+    const itemsResult = await pool.request()
+      .input('id', sql.Int, id)
+      .query(`
+        SELECT 
+          mi.*,
+          mu.name as unit_name
+        FROM meal_items mi
+        INNER JOIN measurement_units mu ON mi.unit_id = mu.id
+        WHERE mi.meal_id = @id
+        ORDER BY mi.id
+        `);
+    
+    const meal = mealResult.recordset[0];
+    meal.items = itemsResult.recordset;
+    
+    res.json(meal);
   } catch (error) {
     console.error('Erro ao buscar refeição:', error);
     res.status(500).json({ error: 'Erro interno do servidor' });
   }
 });
 
-/**
- * @swagger
- * /api/meals:
- *   post:
- *     summary: Cria uma nova refeição
- *     tags: [Meals]
- *     security:
- *       - ApiKeyAuth: []
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - user_id
- *               - type_id
- *               - description
- *               - date_time
- *             properties:
- *               user_id:
- *                 type: integer
- *                 description: ID do usuário
- *               type_id:
- *                 type: integer
- *                 description: ID da categoria
- *               description:
- *                 type: string
- *                 description: Descrição da refeição
- *               date_time:
- *                 type: string
- *                 format: date-time
- *                 description: Data e hora da refeição
- *     responses:
- *       201:
- *         description: Refeição criada com sucesso
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Meal'
- *       400:
- *         description: Dados inválidos
- *       401:
- *         description: API Key não fornecida
- *       403:
- *         description: API Key inválida
- *       500:
- *         description: Erro interno do servidor
- */
 router.post('/', async (req, res) => {
   try {
-    const { user_id, type_id, description, date_time } = req.body;
+    const { user_id, type_id, description, date_time, items } = req.body;
     
-    if (!user_id || !type_id || !description || !date_time) {
+    if (!user_id || !type_id || !description || !date_time || !items || !Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ 
-        error: 'user_id, type_id, description e date_time são obrigatórios' 
+        error: 'user_id, type_id, description, date_time e items (array não vazio) são obrigatórios' 
       });
     }
     
@@ -385,6 +197,7 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ error: 'Usuário não encontrado' });
     }
     
+
     const typeExists = await pool.request()
       .input('type_id', sql.Int, type_id)
       .query('SELECT id FROM meal_types WHERE id = @type_id');
@@ -393,71 +206,103 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ error: 'Categoria não encontrada' });
     }
     
-    const result = await pool.request()
-      .input('user_id', sql.Int, user_id)
-      .input('type_id', sql.Int, type_id)
-      .input('description', sql.NVarChar, description)
-      .input('date_time', sql.DateTime, new Date(date_time))
-      .query(`
-        INSERT INTO meals (user_id, type_id, description, date_time, created_at)
-        OUTPUT INSERTED.*
-        VALUES (@user_id, @type_id, @description, @date_time, GETDATE())
-      `);
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      if (!item.item_name || item.quantity === undefined || !item.unit_id) {
+        return res.status(400).json({ 
+          error: `Item ${i + 1} deve ter item_name, quantity e unit_id` 
+        });
+      }
+      
+      const unitExists = await pool.request()
+        .input('unit_id', sql.Int, item.unit_id)
+        .query('SELECT id FROM measurement_units WHERE id = @unit_id');
+      
+      if (unitExists.recordset.length === 0) {
+        return res.status(400).json({ 
+          error: `Unidade de medida com ID ${item.unit_id} não encontrada` 
+        });
+      }
+    }
     
-    res.status(201).json(result.recordset[0]);
+    const transaction = new sql.Transaction(pool);
+    await transaction.begin();
+    
+    try {
+      const mealResult = await transaction.request()
+        .input('user_id', sql.Int, user_id)
+        .input('type_id', sql.Int, type_id)
+        .input('description', sql.NVarChar, description)
+        .input('date_time', sql.DateTime, new Date(date_time))
+        .query(`
+          INSERT INTO meals (user_id, type_id, description, date_time, created_at)
+          OUTPUT INSERTED.*
+          VALUES (@user_id, @type_id, @description, @date_time, GETDATE())
+        `);
+      
+      const meal = mealResult.recordset[0];
+      
+      const mealItems = [];
+      for (const item of items) {
+        const itemResult = await transaction.request()
+          .input('meal_id', sql.Int, meal.id)
+          .input('item_name', sql.NVarChar, item.item_name)
+          .input('quantity', sql.Decimal(10, 2), item.quantity)
+          .input('unit_id', sql.Int, item.unit_id)
+          .query(`
+            INSERT INTO meal_items (meal_id, item_name, quantity, unit_id, created_at)
+            OUTPUT INSERTED.*
+            VALUES (@meal_id, @item_name, @quantity, @unit_id, GETDATE())
+          `);
+        
+        mealItems.push(itemResult.recordset[0]);
+      }
+      
+      await transaction.commit();
+      
+      const completeMeal = await pool.request()
+        .input('id', sql.Int, meal.id)
+        .query(`
+          SELECT 
+            m.*,
+            u.name as user_name,
+            mt.name as type_name
+          FROM meals m
+          INNER JOIN users u ON m.user_id = u.id
+          INNER JOIN meal_types mt ON m.type_id = mt.id
+          WHERE m.id = @id
+        `);
+      
+      const completeItems = await pool.request()
+        .input('meal_id', sql.Int, meal.id)
+        .query(`
+          SELECT 
+            mi.*,
+            mu.name as unit_name
+          FROM meal_items mi
+          INNER JOIN measurement_units mu ON mi.unit_id = mu.id
+          WHERE mi.meal_id = @meal_id
+          ORDER BY mi.id
+        `);
+      
+      const response = {
+        ...completeMeal.recordset[0],
+        items: completeItems.recordset
+      };
+      
+      res.status(201).json(response);
+      
+    } catch (error) {
+      await transaction.rollback();
+      throw error;
+    }
+    
   } catch (error) {
     console.error('Erro ao criar refeição:', error);
     res.status(500).json({ error: 'Erro interno do servidor' });
   }
 });
 
-/**
- * @swagger
- * /api/meals/{id}:
- *   put:
- *     summary: Atualiza uma refeição existente
- *     tags: [Meals]
- *     security:
- *       - ApiKeyAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: integer
- *         description: ID da refeição
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               type_id:
- *                 type: integer
- *               description:
- *                 type: string
- *               date_time:
- *                 type: string
- *                 format: date-time
- *     responses:
- *       200:
- *         description: Refeição atualizada com sucesso
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Meal'
- *       400:
- *         description: Dados inválidos
- *       401:
- *         description: API Key não fornecida
- *       403:
- *         description: API Key inválida
- *       404:
- *         description: Refeição não encontrada
- *       500:
- *         description: Erro interno do servidor
- */
 router.put('/:id', async (req, res) => {
   try {
     const { id } = req.params;
@@ -526,40 +371,20 @@ router.put('/:id', async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /api/meals/{id}:
- *   delete:
- *     summary: Remove uma refeição
- *     tags: [Meals]
- *     security:
- *       - ApiKeyAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: integer
- *         description: ID da refeição
- *     responses:
- *       200:
- *         description: Refeição removida com sucesso
- *       401:
- *         description: API Key não fornecida
- *       403:
- *         description: API Key inválida
- *       404:
- *         description: Refeição não encontrada
- *       500:
- *         description: Erro interno do servidor
- */
 router.delete('/:id', async (req, res) => {
   try {
     const { id } = req.params;
+    
+    // Validar e converter o ID para número
+    const mealId = parseInt(id);
+    if (isNaN(mealId) || mealId <= 0) {
+      return res.status(400).json({ error: 'ID inválido' });
+    }
+    
     const pool = await getConnection();
     
     const result = await pool.request()
-      .input('id', sql.Int, id)
+      .input('id', sql.Int, mealId)
       .query('DELETE FROM meals WHERE id = @id');
     
     if (result.rowsAffected[0] === 0) {

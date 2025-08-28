@@ -2,26 +2,30 @@ const jwt = require('jsonwebtoken');
 
 /**
  * Gera um access token JWT
- * @param {Object} payload - Dados do usuário
+ * @param {Object|number} payload - Dados do usuário ou ID do usuário
  * @returns {string} - Token JWT
  */
 const generateAccessToken = (payload) => {
-  const expiresIn = process.env.JWT_ACCESS_EXPIRES_IN
+  const tokenPayload = typeof payload === 'number' ? { userId: payload } : payload;
   
-  return jwt.sign(payload, process.env.JWT_SECRET, {
+  const expiresIn = process.env.JWT_ACCESS_EXPIRES_IN || '1h';
+  
+  return jwt.sign(tokenPayload, process.env.JWT_SECRET, {
     expiresIn: expiresIn
   });
 };
 
 /**
  * Gera um refresh token JWT
- * @param {Object} payload - Dados do usuário
+ * @param {Object|number} payload - Dados do usuário ou ID do usuário
  * @returns {string} - Token JWT
  */
 const generateRefreshToken = (payload) => {
-  const expiresIn = process.env.JWT_REFRESH_EXPIRES_IN
+  const tokenPayload = typeof payload === 'number' ? { userId: payload } : payload;
   
-  return jwt.sign(payload, process.env.JWT_SECRET, {
+  const expiresIn = process.env.JWT_REFRESH_EXPIRES_IN || '7d';
+  
+  return jwt.sign(tokenPayload, process.env.JWT_SECRET, {
     expiresIn: expiresIn
   });
 };

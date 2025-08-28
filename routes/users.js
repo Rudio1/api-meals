@@ -4,145 +4,13 @@ const { getConnection, sql } = require('../config/database');
 const bcrypt = require('bcrypt');
 const { generateAccessToken, generateRefreshToken, verifyToken } = require('../utils/jwt');
 
-/**
- * @swagger
- * components:
- *   schemas:
- *     User:
- *       type: object
- *       required:
- *         - name
- *         - email
- *         - password
- *       properties:
- *         id:
- *           type: integer
- *           description: ID único do usuário
- *         name:
- *           type: string
- *           description: Nome completo do usuário
- *         email:
- *           type: string
- *           format: email
- *           description: Email único do usuário
- *         password:
- *           type: string
- *           description: Senha criptografada
- *         themeSelected:
- *           type: string
- *           description: Tema selecionado pelo usuário (light/dark)
- *         created_at:
- *           type: string
- *           format: date-time
- *           description: Data de criação
- *         updated_at:
- *           type: string
- *           format: date-time
- *           description: Data de atualização
- *     
- *     UserLogin:
- *       type: object
- *       required:
- *         - email
- *         - password
- *       properties:
- *         email:
- *           type: string
- *           format: email
- *         password:
- *           type: string
- *     
- *     LoginResponse:
- *       type: object
- *       properties:
- *         message:
- *           type: string
- *         user:
- *           type: object
- *           properties:
- *             id:
- *               type: integer
- *             name:
- *               type: string
- *             email:
- *               type: string
- *             themeSelected:
- *               type: string
- *         tokens:
- *           type: object
- *           properties:
- *             access_token:
- *               type: string
- *             refresh_token:
- *               type: string
- *             expires_in:
- *               type: integer
- *     
- *     RefreshTokenRequest:
- *       type: object
- *       required:
- *         - refresh_token
- *       properties:
- *         refresh_token:
- *           type: string
- *           description: Refresh token para renovar o access token
- *     
- *     UserEditRequest:
- *       type: object
- *       properties:
- *         name:
- *           type: string
- *           description: Novo nome do usuário
- *         themeSelected:
- *           type: string
- *           description: Novo tema selecionado (light/dark)
- *           enum: [light, dark]
- */
-
-/**
- * @swagger
- * /api/users:
- *   post:
- *     summary: Cria um novo usuário
- *     tags: [Users]
- *     security:
- *       - ApiKeyAuth: []
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             $ref: '#/components/schemas/User'
- *     responses:
- *       201:
- *         description: Usuário criado com sucesso
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/User'
- *       400:
- *         description: Dados inválidos ou email já existe
- *       401:
- *         description: API Key não fornecida
- *       403:
- *         description: API Key inválida
- *       500:
- *         description: Erro interno do servidor
- */
-router.post('/', async (req, res) => {
+router.post('/register', async (req, res) => {
   try {
     const { name, email, password } = req.body;
     
-    // Validação básica
     if (!name || !email || !password) {
       return res.status(400).json({ 
         error: 'Nome, email e senha são obrigatórios' 
-      });
-    }
-    
-    if (password.length < 6) {
-      return res.status(400).json({ 
-        error: 'A senha deve ter pelo menos 6 caracteres' 
       });
     }
     
@@ -153,21 +21,20 @@ router.post('/', async (req, res) => {
     
     if (existingUser.recordset.length > 0) {
       return res.status(400).json({ 
-        error: 'Este email já está em uso' 
+        error: 'Email já está em uso' 
       });
     }
-
-    const saltRounds = 10;
-    const hashedPassword = await bcrypt.hash(password, saltRounds);
-
+    
+    const hashedPassword = await bcrypt.hash(password, 10);
+    
     const result = await pool.request()
       .input('name', sql.NVarChar, name)
       .input('email', sql.NVarChar, email)
-      .input('password', sql.NVarChar, hashedPassword)
+      .input('hashedPassword', sql.NVarChar, hashedPassword)
       .query(`
         INSERT INTO users (name, email, password, themeSelected, created_at, updated_at)
-        OUTPUT INSERTED.id, INSERTED.name, INSERTED.email, INSERTED.themeSelected, INSERTED.created_at, INSERTED.updated_at
-        VALUES (@name, @email, @password, 'light', GETDATE(), GETDATE())
+        OUTPUT INSERTED.id, INSERTED.name, INSERTED.email, INSERTED.themeSelected, INSERTED.created_at
+        VALUES (@name, @email, @hashedPassword, 'light', GETDATE(), GETDATE())
       `);
     
     const newUser = result.recordset[0];
@@ -178,9 +45,7 @@ router.post('/', async (req, res) => {
         id: newUser.id,
         name: newUser.name,
         email: newUser.email,
-        themeSelected: newUser.themeSelected,
-        created_at: newUser.created_at,
-        updated_at: newUser.updated_at
+        themeSelected: newUser.themeSelected
       }
     });
     
@@ -190,39 +55,10 @@ router.post('/', async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /api/users/login:
- *   post:
- *     summary: Faz login do usuário
- *     tags: [Users]
- *     security:
- *       - ApiKeyAuth: []
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             $ref: '#/components/schemas/UserLogin'
- *     responses:
- *       200:
- *         description: Login realizado com sucesso
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/LoginResponse'
- *       400:
- *         description: Dados inválidos
- *       401:
- *         description: Email ou senha incorretos ou API Key não fornecida
- *       403:
- *         description: API Key inválida
- *       500:
- *         description: Erro interno do servidor
- */
 router.post('/login', async (req, res) => {
   try {
     const { email, password } = req.body;
+    console.log(email, password);
     
     if (!email || !password) {
       return res.status(400).json({ 
@@ -231,50 +67,29 @@ router.post('/login', async (req, res) => {
     }
     
     const pool = await getConnection();
+    
     const result = await pool.request()
       .input('email', sql.NVarChar, email)
       .query('SELECT * FROM users WHERE email = @email');
     
     if (result.recordset.length === 0) {
       return res.status(401).json({ 
-        error: 'Email ou senha incorretos' 
+        error: 'Email ou senha inválidos' 
       });
     }
     
     const user = result.recordset[0];
     
-    const isPasswordValid = await bcrypt.compare(password, user.password);
+    const isValidPassword = await bcrypt.compare(password, user.password);
     
-    if (!isPasswordValid) {
+    if (!isValidPassword) {
       return res.status(401).json({ 
-        error: 'Email ou senha incorretos' 
+        error: 'Email ou senha inválidos' 
       });
     }
     
-    const accessToken = generateAccessToken({ 
-      id: user.id, 
-      email: user.email 
-    });
-    
-    const refreshToken = generateRefreshToken({ 
-      id: user.id, 
-      email: user.email 
-    });
-    
-    const refreshExpiresIn = parseInt(process.env.JWT_REFRESH_EXPIRES_IN)
-    const refreshExpiresAt = new Date(Date.now() + (refreshExpiresIn * 1000));
-
-    await pool.request()
-      .input('user_id', sql.Int, user.id)
-      .input('refresh_token', sql.NVarChar, refreshToken)
-      .input('refresh_token_expires_at', sql.DateTime, refreshExpiresAt)
-      .query(`
-        UPDATE users 
-        SET refresh_token = @refresh_token, 
-            refresh_token_expires_at = @refresh_token_expires_at,
-            updated_at = GETDATE()
-        WHERE id = @user_id
-      `);
+    const accessToken = generateAccessToken(user.id);
+    const refreshToken = generateRefreshToken(user.id);
     
     res.json({
       message: 'Login realizado com sucesso',
@@ -287,65 +102,73 @@ router.post('/login', async (req, res) => {
       tokens: {
         access_token: accessToken,
         refresh_token: refreshToken,
-        expires_in: parseInt(process.env.JWT_ACCESS_EXPIRES_IN) || 3600
+        expires_in: 3600 // 1 hora
       }
     });
     
   } catch (error) {
-    console.error('Erro no login:', error);
+    console.error('Erro ao fazer login:', error);
     res.status(500).json({ error: 'Erro interno do servidor' });
   }
 });
 
-/**
- * @swagger
- * /api/users/edit:
- *   put:
- *     summary: Edita nome e tema do usuário
- *     tags: [Users]
- *     security:
- *       - ApiKeyAuth: []
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             $ref: '#/components/schemas/UserEditRequest'
- *     responses:
- *       200:
- *         description: Usuário atualizado com sucesso
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 message:
- *                   type: string
- *                 user:
- *                   type: object
- *                   properties:
- *                     id:
- *                       type: integer
- *                     name:
- *                       type: string
- *                     email:
- *                       type: string
- *                     themeSelected:
- *                       type: string
- *                     updated_at:
- *                       type: string
- *                       format: date-time
- *       400:
- *         description: Dados inválidos
- *       401:
- *         description: API Key não fornecida
- *       403:
- *         description: API Key inválida
- *       404:
- *         description: Usuário não encontrado
- *       500:
- *         description: Erro interno do servidor
- */
+router.post('/refresh-token', async (req, res) => {
+  try {
+    const { refresh_token } = req.body;
+    
+    if (!refresh_token) {
+      return res.status(400).json({ 
+        error: 'Refresh token é obrigatório' 
+      });
+    }
+    
+    const decoded = verifyToken(refresh_token);
+    
+    if (!decoded) {
+      return res.status(401).json({ 
+        error: 'Refresh token inválido' 
+      });
+    }
+    
+    const newAccessToken = generateAccessToken(decoded.userId);
+    
+    res.json({
+      message: 'Token renovado com sucesso',
+      access_token: newAccessToken,
+      expires_in: 3600
+    });
+    
+  } catch (error) {
+    console.error('Erro ao renovar token:', error);
+    res.status(500).json({ error: 'Erro interno do servidor' });
+  }
+});
+
+router.get('/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const pool = await getConnection();
+    
+    const result = await pool.request()
+      .input('id', sql.Int, id)
+      .query(`
+        SELECT id, name, email, themeSelected, created_at, updated_at
+        FROM users 
+        WHERE id = @id
+      `);
+    
+    if (result.recordset.length === 0) {
+      return res.status(404).json({ error: 'Usuário não encontrado' });
+    }
+    
+    res.json(result.recordset[0]);
+    
+  } catch (error) {
+    console.error('Erro ao buscar usuário:', error);
+    res.status(500).json({ error: 'Erro interno do servidor' });
+  }
+});
+
 router.put('/edit', async (req, res) => {
   try {
     const { name, themeSelected } = req.body;
@@ -379,9 +202,7 @@ router.put('/edit', async (req, res) => {
     
     if (userExists.recordset.length === 0) {
       return res.status(404).json({ error: 'Usuário não encontrado' });
-    }
-    
-    const currentUser = userExists.recordset[0];
+    }  
     
     let updateFields = [];
     let inputs = [];
@@ -429,92 +250,92 @@ router.put('/edit', async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /api/users/refresh:
- *   post:
- *     summary: Renova o access token usando refresh token
- *     tags: [Users]
- *     security:
- *       - ApiKeyAuth: []
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             $ref: '#/components/schemas/RefreshTokenRequest'
- *     responses:
- *       200:
- *         description: Token renovado com sucesso
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 message:
- *                   type: string
- *                 access_token:
- *                   type: string
- *                 expires_in:
- *                   type: integer
- *       400:
- *         description: Refresh token não fornecido
- *       401:
- *         description: Refresh token inválido ou expirado
- *       500:
- *         description: Erro interno do servidor
- */
-router.post('/refresh', async (req, res) => {
+router.put('/:id/change-password', async (req, res) => {
   try {
-    const { refresh_token } = req.body;
+    const { id } = req.params;
+    const { currentPassword, newPassword } = req.body;
     
-    if (!refresh_token) {
+    if (!currentPassword || !newPassword) {
       return res.status(400).json({ 
-        error: 'Refresh token é obrigatório' 
-      });
-    }
-    
-    const decoded = verifyToken(refresh_token);
-    if (!decoded) {
-      return res.status(401).json({ 
-        error: 'Refresh token inválido' 
+        error: 'Senha atual e nova senha são obrigatórias' 
       });
     }
     
     const pool = await getConnection();
     
     const result = await pool.request()
-      .input('user_id', sql.Int, decoded.id)
-      .input('refresh_token', sql.NVarChar, refresh_token)
-      .query(`
-        SELECT id, name, email, refresh_token_expires_at 
-        FROM users 
-        WHERE id = @user_id 
-        AND refresh_token = @refresh_token
-        AND refresh_token_expires_at > GETDATE()
-      `);
+      .input('id', sql.Int, id)
+      .query('SELECT password FROM users WHERE id = @id');
     
     if (result.recordset.length === 0) {
-      return res.status(401).json({ 
-        error: 'Refresh token inválido ou expirado' 
-      });
+      return res.status(404).json({ error: 'Usuário não encontrado' });
     }
     
     const user = result.recordset[0];
     
-    const newAccessToken = generateAccessToken({ 
-      id: user.id, 
-      email: user.email 
-    });
+    const isValidPassword = await bcrypt.compare(currentPassword, user.password);
     
-    res.json({
-      message: 'Token renovado com sucesso',
-      access_token: newAccessToken,
-      expires_in: parseInt(process.env.JWT_ACCESS_EXPIRES_IN) || 3600
-    });
+    if (!isValidPassword) {
+      return res.status(401).json({ 
+        error: 'Senha atual incorreta' 
+      });
+    }
+    
+    const hashedNewPassword = await bcrypt.hash(newPassword, 10);
+    
+    await pool.request()
+      .input('id', sql.Int, id)
+      .input('hashedPassword', sql.NVarChar, hashedNewPassword)
+      .query(`
+        UPDATE users 
+        SET password = @hashedPassword, updated_at = GETDATE()
+        WHERE id = @id
+      `);
+    
+    res.json({ message: 'Senha alterada com sucesso' });
     
   } catch (error) {
-    console.error('Erro ao renovar token:', error);
+    console.error('Erro ao alterar senha:', error);
+    res.status(500).json({ error: 'Erro interno do servidor' });
+  }
+});
+
+router.get('/', async (req, res) => {
+  try {
+    const pool = await getConnection();
+    
+    const result = await pool.request()
+      .query(`
+        SELECT id, name, email, themeSelected, created_at, updated_at
+        FROM users 
+        ORDER BY name
+      `);
+    
+    res.json(result.recordset);
+    
+  } catch (error) {
+    console.error('Erro ao listar usuários:', error);
+    res.status(500).json({ error: 'Erro interno do servidor' });
+  }
+});
+
+router.delete('/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const pool = await getConnection();
+    
+    const result = await pool.request()
+      .input('id', sql.Int, id)
+      .query('DELETE FROM users WHERE id = @id');
+    
+    if (result.rowsAffected[0] === 0) {
+      return res.status(404).json({ error: 'Usuário não encontrado' });
+    }
+    
+    res.json({ message: 'Usuário removido com sucesso' });
+    
+  } catch (error) {
+    console.error('Erro ao remover usuário:', error);
     res.status(500).json({ error: 'Erro interno do servidor' });
   }
 });
