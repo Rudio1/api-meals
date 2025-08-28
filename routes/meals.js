@@ -121,6 +121,98 @@ router.get('/dashboard', async (req, res) => {
 
 /**
  * @swagger
+ * /api/meals/filter-by-date:
+ *   get:
+ *     summary: Filtra refeições por data específica
+ *     tags: [Meals]
+ *     security:
+ *       - ApiKeyAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: date
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: date
+ *           example: "2025-08-26"
+ *         description: Data para filtrar as refeições (formato YYYY-MM-DD)
+ *     responses:
+ *       200:
+ *         description: Refeições filtradas por data retornadas com sucesso
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   description: Mensagem de sucesso
+ *                 total_refeicoes:
+ *                   type: integer
+ *                   description: Total de refeições encontradas para a data
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/DashboardMeal'
+ *       400:
+ *         description: Data não fornecida ou formato inválido
+ *       401:
+ *         description: API Key não fornecida
+ *       403:
+ *         description: API Key inválida
+ *       500:
+ *         description: Erro interno do servidor
+ */
+router.get('/filter-by-date', async (req, res) => {
+  try {
+    const { date } = req.query;
+    
+    if (!date) {
+      return res.status(400).json({ 
+        error: 'Parâmetro "date" é obrigatório. Use o formato YYYY-MM-DD' 
+      });
+    }
+    
+    // Validação básica do formato da data
+    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+    if (!dateRegex.test(date)) {
+      return res.status(400).json({ 
+        error: 'Formato de data inválido. Use o formato YYYY-MM-DD' 
+      });
+    }
+    
+    const pool = await getConnection();
+    
+    const result = await pool.request()
+      .input('date', sql.Date, date)
+      .query(`        
+        SELECT 
+          b.name as Usuario, 
+          a.description as Refeicao,    
+          CONVERT(VARCHAR(10), a.date_time, 103) + ' ' + 
+          CONVERT(VARCHAR(8), a.date_time, 108) AS Data,
+          c.name as Tipo 
+        FROM meals a
+        JOIN users b ON a.user_id = b.id
+        JOIN meal_types c ON a.type_id = c.id
+        WHERE cast(a.date_time as date) = @date
+        ORDER BY a.date_time DESC
+      `);
+    
+    res.json({
+      message: `Refeições encontradas para a data ${date}`,
+      total_refeicoes: result.recordset.length,
+      data: result.recordset
+    });
+    
+  } catch (error) {
+    console.error('Erro ao filtrar refeições por data:', error);
+    res.status(500).json({ error: 'Erro interno do servidor' });
+  }
+});
+
+/**
+ * @swagger
  * /api/meals:
  *   get:
  *     summary: Lista todas as refeições com detalhes
