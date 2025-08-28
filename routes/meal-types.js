@@ -15,50 +15,48 @@ router.get('/', async (req, res) => {
   }
 });
 
-router.post('/', async (req, res) => {
-  try {
-    const { name } = req.body;
+// router.post('/', async (req, res) => {
+//   try {
+//     const { name } = req.body;
     
-    if (!name || name.trim() === '') {
-      return res.status(400).json({ 
-        error: 'Nome da categoria é obrigatório' 
-      });
-    }
+//     if (!name || name.trim() === '') {
+//       return res.status(400).json({ 
+//         error: 'Nome da categoria é obrigatório' 
+//       });
+//     }
     
-    const pool = await getConnection();
+//     const pool = await getConnection();
     
-    const existingCategory = await pool.request()
-      .input('name', sql.NVarChar, name.trim())
-      .query('SELECT id FROM meal_types WHERE name = @name');
+//     const existingCategory = await pool.request()
+//       .input('name', sql.NVarChar, name.trim())
+//       .query('SELECT id FROM meal_types WHERE name = @name');
     
-    if (existingCategory.recordset.length > 0) {
-      return res.status(400).json({ 
-        error: 'Categoria com este nome já existe' 
-      });
-    }
+//     if (existingCategory.recordset.length > 0) {
+//       return res.status(400).json({ 
+//         error: 'Categoria com este nome já existe' 
+//       });
+//     }
     
-    const result = await pool.request()
-      .input('name', sql.NVarChar, name.trim())
-      .query(`
-        INSERT INTO meal_types (name)
-        OUTPUT INSERTED.*
-        VALUES (@name)
-      `);
+//     const result = await pool.request()
+//       .input('name', sql.NVarChar, name.trim())
+//       .query(`
+//         INSERT INTO meal_types (name)
+//         OUTPUT INSERTED.*
+//         VALUES (@name)
+//       `);
     
-    res.status(201).json(result.recordset[0]);
+//     res.status(201).json(result.recordset[0]);
     
-  } catch (error) {
-    console.error('Erro ao criar categoria:', error);
-    res.status(500).json({ error: 'Erro interno do servidor' });
-  }
-});
+//   } catch (error) {
+//     console.error('Erro ao criar categoria:', error);
+//     res.status(500).json({ error: 'Erro interno do servidor' });
+//   }
+// });
 
-// Busca uma categoria por ID
 router.get('/:id', async (req, res) => {
   try {
     const { id } = req.params;
     
-    // Validar e converter o ID para número
     const categoryId = parseInt(id);
     if (isNaN(categoryId) || categoryId <= 0) {
       return res.status(400).json({ error: 'ID inválido' });
@@ -82,105 +80,96 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-// Atualiza uma categoria
-router.put('/:id', async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { name } = req.body;
+// router.put('/:id', async (req, res) => {
+//   try {
+//     const { id } = req.params;
+//     const { name } = req.body;
     
-    // Validar e converter o ID para número
-    const categoryId = parseInt(id);
-    if (isNaN(categoryId) || categoryId <= 0) {
-      return res.status(400).json({ error: 'ID inválido' });
-    }
+//     const categoryId = parseInt(id);
+//     if (isNaN(categoryId) || categoryId <= 0) {
+//       return res.status(400).json({ error: 'ID inválido' });
+//     }
     
-    if (!name || name.trim() === '') {
-      return res.status(400).json({ 
-        error: 'Nome da categoria é obrigatório' 
-      });
-    }
+//     if (!name || name.trim() === '') {
+//       return res.status(400).json({ 
+//         error: 'Nome da categoria é obrigatório' 
+//       });
+//     }
     
-    const pool = await getConnection();
+//     const pool = await getConnection();
     
-    // Verificar se a categoria existe
-    const categoryExists = await pool.request()
-      .input('id', sql.Int, categoryId)
-      .query('SELECT id FROM meal_types WHERE id = @id');
+//     const categoryExists = await pool.request()
+//       .input('id', sql.Int, categoryId)
+//       .query('SELECT id FROM meal_types WHERE id = @id');
     
-    if (categoryExists.recordset.length === 0) {
-      return res.status(404).json({ error: 'Categoria não encontrada' });
-    }
+//     if (categoryExists.recordset.length === 0) {
+//       return res.status(404).json({ error: 'Categoria não encontrada' });
+//     }
     
-    // Verificar se já existe outra categoria com o mesmo nome
-    const existingCategory = await pool.request()
-      .input('name', sql.NVarChar, name.trim())
-      .input('id', sql.Int, categoryId)
-      .query('SELECT id FROM meal_types WHERE name = @name AND id != @id');
+//     const existingCategory = await pool.request()
+//       .input('name', sql.NVarChar, name.trim())
+//       .input('id', sql.Int, categoryId)
+//       .query('SELECT id FROM meal_types WHERE name = @name AND id != @id');
     
-    if (existingCategory.recordset.length > 0) {
-      return res.status(400).json({ 
-        error: 'Categoria com este nome já existe' 
-      });
-    }
+//     if (existingCategory.recordset.length > 0) {
+//       return res.status(400).json({ 
+//         error: 'Categoria com este nome já existe' 
+//       });
+//     }
     
-    // Atualizar categoria
-    const result = await pool.request()
-      .input('id', sql.Int, categoryId)
-      .input('name', sql.NVarChar, name.trim())
-      .query(`
-        UPDATE meal_types 
-        SET name = @name
-        OUTPUT INSERTED.*
-        WHERE id = @id
-      `);
+//     const result = await pool.request()
+//       .input('id', sql.Int, categoryId)
+//       .input('name', sql.NVarChar, name.trim())
+//       .query(`
+//         UPDATE meal_types 
+//         SET name = @name
+//         OUTPUT INSERTED.*
+//         WHERE id = @id
+//       `);
     
-    res.json(result.recordset[0]);
+//     res.json(result.recordset[0]);
     
-  } catch (error) {
-    console.error('Erro ao atualizar categoria:', error);
-    res.status(500).json({ error: 'Erro interno do servidor' });
-  }
-});
+//   } catch (error) {
+//     console.error('Erro ao atualizar categoria:', error);
+//     res.status(500).json({ error: 'Erro interno do servidor' });
+//   }
+// });
 
-// Remove uma categoria
-router.delete('/:id', async (req, res) => {
-  try {
-    const { id } = req.params;
+// router.delete('/:id', async (req, res) => {
+//   try {
+//     const { id } = req.params;
     
-    // Validar e converter o ID para número
-    const categoryId = parseInt(id);
-    if (isNaN(categoryId) || categoryId <= 0) {
-      return res.status(400).json({ error: 'ID inválido' });
-    }
+//     const categoryId = parseInt(id);
+//     if (isNaN(categoryId) || categoryId <= 0) {
+//       return res.status(400).json({ error: 'ID inválido' });
+//     }
     
-    const pool = await getConnection();
+//     const pool = await getConnection();
     
-    // Verificar se a categoria está sendo usada em refeições
-    const mealsUsingCategory = await pool.request()
-      .input('id', sql.Int, categoryId)
-      .query('SELECT COUNT(*) as count FROM meals WHERE type_id = @id');
+//     const mealsUsingCategory = await pool.request()
+//       .input('id', sql.Int, categoryId)
+//       .query('SELECT COUNT(*) as count FROM meals WHERE type_id = @id');
     
-    if (mealsUsingCategory.recordset[0].count > 0) {
-      return res.status(400).json({ 
-        error: 'Não é possível remover uma categoria que está sendo usada em refeições' 
-      });
-    }
+//     if (mealsUsingCategory.recordset[0].count > 0) {
+//       return res.status(400).json({ 
+//         error: 'Não é possível remover uma categoria que está sendo usada em refeições' 
+//       });
+//     }
     
-    // Remover categoria
-    const result = await pool.request()
-      .input('id', sql.Int, categoryId)
-      .query('DELETE FROM meal_types WHERE id = @id');
+//     const result = await pool.request()
+//       .input('id', sql.Int, categoryId)
+//       .query('DELETE FROM meal_types WHERE id = @id');
     
-    if (result.rowsAffected[0] === 0) {
-      return res.status(404).json({ error: 'Categoria não encontrada' });
-    }
+//     if (result.rowsAffected[0] === 0) {
+//       return res.status(404).json({ error: 'Categoria não encontrada' });
+//     }
     
-    res.json({ message: 'Categoria removida com sucesso' });
+//     res.json({ message: 'Categoria removida com sucesso' });
     
-  } catch (error) {
-    console.error('Erro ao remover categoria:', error);
-    res.status(500).json({ error: 'Erro interno do servidor' });
-  }
-});
+//   } catch (error) {
+//     console.error('Erro ao remover categoria:', error);
+//     res.status(500).json({ error: 'Erro interno do servidor' });
+//   }
+// });
 
 module.exports = router;

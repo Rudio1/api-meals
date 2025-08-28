@@ -3,7 +3,6 @@ const router = express.Router();
 const { getConnection } = require('../config/database');
 const sql = require('mssql');
 
-// Lista todas as unidades de medida
 router.get('/', async (req, res) => {
   try {
     const pool = await getConnection();
