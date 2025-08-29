@@ -2,6 +2,13 @@ const express = require('express');
 const router = express.Router();
 const { getConnection, sql } = require('../config/database');
 
+const parseDateTime = (dateTimeString) => {
+  if (dateTimeString.endsWith('Z')) {
+    return new Date(dateTimeString);
+  }
+  return new Date(dateTimeString + 'Z');
+};
+
 router.get('/dashboard', async (req, res) => {
   try {
     const pool = await getConnection();
@@ -197,7 +204,7 @@ router.post('/', async (req, res) => {
         .input('user_id', sql.Int, user_id)
         .input('type_id', sql.Int, type_id)
         .input('description', sql.NVarChar, description)
-        .input('date_time', sql.DateTime, new Date(date_time))
+        .input('date_time', sql.DateTime, parseDateTime(date_time))
         .query(`
           INSERT INTO meals (user_id, type_id, description, date_time, created_at)
           OUTPUT INSERTED.*
@@ -368,7 +375,7 @@ router.put('/:id', async (req, res) => {
       
       if (date_time !== undefined) {
         updateFields.push('date_time = @date_time');
-        inputs.push({ name: 'date_time', type: sql.DateTime, value: new Date(date_time) });
+        inputs.push({ name: 'date_time', type: sql.DateTime, value: parseDateTime(date_time) });
       }
       
       if (updateFields.length > 0) {
