@@ -339,4 +339,44 @@ router.delete('/:id', async (req, res) => {
   }
 });
 
+router.post('/contacts', async (req, res) => {
+  try {
+    const { name, telephone } = req.body;
+    
+    // Validação básica
+    if (!name || !telephone) {
+      return res.status(400).json({ 
+        error: 'Nome e telefone são obrigatórios' 
+      });
+    }
+    
+    const pool = await getConnection();
+    
+    const result = await pool.request()
+      .input('name', sql.VarChar, name.trim())
+      .input('telephone', sql.VarChar, telephone.trim())
+      .query(`
+        INSERT INTO Contacts (Name, Telephone, CreatedAt)
+        OUTPUT INSERTED.Id, INSERTED.Name, INSERTED.Telephone, INSERTED.CreatedAt
+        VALUES (@name, @telephone, GETDATE())
+      `);
+    
+    const newContact = result.recordset[0];
+    
+    res.status(201).json({
+      message: 'Contato criado com sucesso',
+      contact: {
+        id: newContact.Id,
+        name: newContact.Name,
+        telephone: newContact.Telephone,
+        createdAt: newContact.CreatedAt
+      }
+    });
+    
+  } catch (error) {
+    console.error('Erro ao criar contato:', error);
+    res.status(500).json({ error: 'Erro interno do servidor' });
+  }
+});
+
 module.exports = router;
