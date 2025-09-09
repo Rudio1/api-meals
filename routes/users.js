@@ -3,6 +3,8 @@ const router = express.Router();
 const { getConnection, sql } = require('../config/database');
 const bcrypt = require('bcrypt');
 const { generateAccessToken, generateRefreshToken, verifyToken } = require('../utils/jwt');
+const { authenticateJWT } = require('../middleware/jwt-auth');
+const { authenticateAdmin } = require('../middleware/admin-auth');
 
 router.post('/register', async (req, res) => {
   try {
@@ -32,9 +34,9 @@ router.post('/register', async (req, res) => {
       .input('email', sql.NVarChar, email)
       .input('hashedPassword', sql.NVarChar, hashedPassword)
       .query(`
-        INSERT INTO users (name, email, password, themeSelected, created_at, updated_at)
-        OUTPUT INSERTED.id, INSERTED.name, INSERTED.email, INSERTED.themeSelected, INSERTED.created_at
-        VALUES (@name, @email, @hashedPassword, 'light', GETDATE(), GETDATE())
+        INSERT INTO users (name, email, password, themeSelected, is_admin, created_at, updated_at)
+        OUTPUT INSERTED.id, INSERTED.name, INSERTED.email, INSERTED.themeSelected, INSERTED.is_admin, INSERTED.created_at
+        VALUES (@name, @email, @hashedPassword, 'light', 0, GETDATE(), GETDATE())
       `);
     
     const newUser = result.recordset[0];
@@ -45,7 +47,8 @@ router.post('/register', async (req, res) => {
         id: newUser.id,
         name: newUser.name,
         email: newUser.email,
-        themeSelected: newUser.themeSelected
+        themeSelected: newUser.themeSelected,
+        is_admin: newUser.is_admin
       }
     });
     
@@ -55,7 +58,7 @@ router.post('/register', async (req, res) => {
   }
 });
 
-router.post('/login', async (req, res) => {
+router.post('/login/blog', async (req, res) => {
   try {
     const { email, password } = req.body;
     
@@ -96,7 +99,8 @@ router.post('/login', async (req, res) => {
         id: user.id,
         name: user.name,
         email: user.email,
-        themeSelected: user.themeSelected
+        themeSelected: user.themeSelected,
+        is_admin: user.is_admin
       },
       tokens: {
         access_token: accessToken,
@@ -107,6 +111,63 @@ router.post('/login', async (req, res) => {
     
   } catch (error) {
     console.error('Erro ao fazer login:', error);
+    res.status(500).json({ error: 'Erro interno do servidor' });
+  }
+});
+
+router.post('/login', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    
+    if (!email || !password) {
+      return res.status(400).json({ 
+        error: 'Email e senha são obrigatórios' 
+      });
+    }
+    
+    const pool = await getConnection();
+    
+    const result = await pool.request()
+      .input('email', sql.NVarChar, email)
+      .query('SELECT * FROM users WHERE email = @email AND is_admin = 1');
+    
+    if (result.recordset.length === 0) {
+      return res.status(401).json({ 
+        error: 'Acesso negado. Apenas administradores podem fazer login aqui.' 
+      });
+    }
+    
+    const user = result.recordset[0];
+    
+    const isValidPassword = await bcrypt.compare(password, user.password);
+    
+    if (!isValidPassword) {
+      return res.status(401).json({ 
+        error: 'Email ou senha inválidos' 
+      });
+    }
+    
+    const accessToken = generateAccessToken(user.id);
+    const refreshToken = generateRefreshToken(user.id);
+    
+    res.json({
+      message: 'Login de administrador realizado com sucesso',
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        themeSelected: user.themeSelected,
+        is_admin: user.is_admin
+      },
+      tokens: {
+        access_token: accessToken,
+        refresh_token: refreshToken,
+        expires_in: process.env.JWT_ACCESS_EXPIRES_IN
+      }
+    });
+    
+  } catch (error) {
+    console.error('Erro ao fazer login de admin:', error);
     res.status(500).json({ error: 'Erro interno do servidor' });
   }
 });
@@ -151,7 +212,7 @@ router.get('/:id', async (req, res) => {
     const result = await pool.request()
       .input('id', sql.Int, id)
       .query(`
-        SELECT id, name, email, themeSelected, created_at, updated_at
+        SELECT id, name, email, themeSelected, is_admin, created_at, updated_at
         FROM users 
         WHERE id = @id
       `);
@@ -299,13 +360,13 @@ router.put('/:id/change-password', async (req, res) => {
   }
 });
 
-router.get('/', async (req, res) => {
+router.get('/', authenticateJWT, authenticateAdmin, async (req, res) => {
   try {
     const pool = await getConnection();
     
     const result = await pool.request()
       .query(`
-        SELECT id, name, email, themeSelected, created_at, updated_at
+        SELECT id, name, email, themeSelected, is_admin, created_at, updated_at
         FROM users 
         ORDER BY name
       `);
@@ -375,6 +436,60 @@ router.post('/contacts', async (req, res) => {
     
   } catch (error) {
     console.error('Erro ao criar contato:', error);
+    res.status(500).json({ error: 'Erro interno do servidor' });
+  }
+});
+
+router.put('/:id/toggle-admin', authenticateJWT, authenticateAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { is_admin } = req.body;
+    
+    if (typeof is_admin !== 'boolean') {
+      return res.status(400).json({ 
+        error: 'is_admin deve ser true ou false' 
+      });
+    }
+    
+    const pool = await getConnection();
+    
+    const userExists = await pool.request()
+      .input('id', sql.Int, id)
+      .query('SELECT id, name, email, is_admin FROM users WHERE id = @id');
+    
+    if (userExists.recordset.length === 0) {
+      return res.status(404).json({ 
+        error: 'Usuário não encontrado' 
+      });
+    }
+    
+    const currentUser = userExists.recordset[0];
+    
+    if (currentUser.is_admin === is_admin) {
+      return res.status(400).json({ 
+        error: `Usuário já possui status de admin: ${is_admin}` 
+      });
+    }
+    
+    const result = await pool.request()
+      .input('id', sql.Int, id)
+      .input('is_admin', sql.Bit, is_admin)
+      .query(`
+        UPDATE users 
+        SET is_admin = @is_admin, updated_at = GETDATE()
+        OUTPUT INSERTED.id, INSERTED.name, INSERTED.email, INSERTED.is_admin, INSERTED.updated_at
+        WHERE id = @id
+      `);
+    
+    const updatedUser = result.recordset[0];
+    
+    res.json({
+      message: `Status de administrador alterado para ${is_admin ? 'ativo' : 'inativo'}`,
+      user: updatedUser
+    });
+    
+  } catch (error) {
+    console.error('Erro ao alterar status de admin:', error);
     res.status(500).json({ error: 'Erro interno do servidor' });
   }
 });

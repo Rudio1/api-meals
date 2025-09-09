@@ -11,6 +11,8 @@ const mealTypesRouter = require('./routes/meal-types');
 const mealsRouter = require('./routes/meals');
 const measurementUnitsRouter = require('./routes/measurement-units');
 const postsRouter = require('./routes/blogs');
+const commentsRouter = require('./routes/comments');
+const commentRepliesRouter = require('./routes/comment-replies');
   
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -71,6 +73,8 @@ app.get('/', (req, res) => {
       meals: '/api/meals',
       measurementUnits: '/api/measurement-units',
       posts: '/api/posts',
+      comments: '/api/comments',
+      commentReplies: '/api/comment-replies',
       swagger: '/api-docs'
     },
     note: 'Todas as rotas da API requerem o header x-api-key'
@@ -84,6 +88,8 @@ app.use('/api/meal-types', mealTypesRouter);
 app.use('/api/meals', mealsRouter);
 app.use('/api/measurement-units', measurementUnitsRouter);
 app.use('/api/posts', postsRouter);
+app.use('/api/comments', commentsRouter);
+app.use('/api/comment-replies', commentRepliesRouter);
 
 app.use('/api-docs', authenticateApiKey, swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
@@ -106,6 +112,8 @@ app.listen(PORT, () => {
   console.log(`Categorias: http://localhost:${PORT}/api/meal-types`);
   console.log(`Refeições: http://localhost:${PORT}/api/meals`);
   console.log(`Posts: http://localhost:${PORT}/api/posts`);
+  console.log(`Comentários: http://localhost:${PORT}/api/comments`);
+  console.log(`Respostas: http://localhost:${PORT}/api/comment-replies`);
   console.log(`Todas as rotas da API requerem o header x-api-key`);
 });
 
