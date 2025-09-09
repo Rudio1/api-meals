@@ -60,8 +60,15 @@ const swaggerSpec = swaggerJsdoc(swaggerOptions);
 // Middleware
 app.use(helmet());
 app.use(cors());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+
+app.use((req, res, next) => {
+  if (req.path.includes('/posts') && (req.method === 'POST' || req.method === 'PUT')) {
+    return next();
+  }
+  express.json({ limit: '10mb' })(req, res, next);
+});
+
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 app.get('/', (req, res) => {
   res.json({
@@ -81,7 +88,6 @@ app.get('/', (req, res) => {
   });
 });
 
-// Aplicar middleware de autenticação em todas as rotas da API
 app.use('/api', authenticateApiKey);
 app.use('/api/users', usersRouter);
 app.use('/api/meal-types', mealTypesRouter);
@@ -94,6 +100,20 @@ app.use('/api/comment-replies', commentRepliesRouter);
 app.use('/api-docs', authenticateApiKey, swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 app.use((err, req, res, next) => {
+  if (err.type === 'entity.too.large') {
+    return res.status(413).json({
+      error: 'Arquivo muito grande',
+      message: 'O arquivo enviado excede o limite de 10MB'
+    });
+  }
+  
+  if (err.code === 'LIMIT_FILE_SIZE') {
+    return res.status(413).json({
+      error: 'Arquivo muito grande',
+      message: 'O arquivo enviado excede o limite de 10MB'
+    });
+  }
+  
   console.error(err.stack);
   res.status(500).json({ 
     error: 'Algo deu errado!',

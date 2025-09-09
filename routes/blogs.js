@@ -2,13 +2,16 @@ const express = require('express');
 const router = express.Router();
 const { getConnection, sql } = require('../config/database');
 const { authenticateJWT } = require('../middleware/jwt-auth');
+const { uploadSingleImage, validateUpload, handleUploadError } = require('../middleware/upload');
+const { uploadImage, deleteImage, extractFileNameFromUrl } = require('../utils/image-manager');
 
 
 // POST /api/posts - Criar novo post (requer JWT)
-router.post('/', authenticateJWT, async (req, res) => {
+router.post('/', authenticateJWT, uploadSingleImage, handleUploadError, async (req, res) => {
   try {
-    const { title, slug, content, cover_image, status = 'draft' } = req.body;
+    const { title, slug, content, status = 'draft' } = req.body;
     const author_id = req.user.userId; 
+    let cover_image_url = null;
     
     if (!title || !slug || !content) {
       return res.status(400).json({ 
@@ -34,11 +37,44 @@ router.post('/', authenticateJWT, async (req, res) => {
       });
     }
     
+    if (req.file) {
+      const { validateImageFile } = require('../utils/image-manager');
+      const validation = validateImageFile(req.file);
+      if (!validation.valid) {
+        return res.status(400).json({
+          error: 'Arquivo inválido',
+          message: validation.error
+        });
+      }
+
+      try {
+        const uploadResult = await uploadImage(req.file.buffer, req.file.originalname, {
+          prefix: 'posts',
+          imageOptions: {
+            maxWidth: 1920,
+            maxHeight: 1080,
+            quality: 85,
+            format: 'jpeg'
+          }
+        });
+        
+        if (uploadResult.success) {
+          cover_image_url = uploadResult.publicUrl;
+        }
+      } catch (uploadError) {
+        console.error('Erro no upload da imagem:', uploadError);
+        return res.status(500).json({ 
+          error: 'Falha no upload da imagem',
+          message: 'Tente novamente ou envie uma imagem diferente'
+        });
+      }
+    }
+    
     const result = await pool.request()
       .input('title', sql.NVarChar, title.trim())
       .input('slug', sql.NVarChar, slug.trim())
       .input('content', sql.NVarChar, content.trim())
-      .input('cover_image', sql.NVarChar, cover_image ? cover_image.trim() : null)
+      .input('cover_image', sql.NVarChar, cover_image_url)
       .input('author_id', sql.BigInt, author_id)
       .input('status', sql.NVarChar, status)
       .query(`
@@ -50,7 +86,10 @@ router.post('/', authenticateJWT, async (req, res) => {
     
     const newPost = result.recordset[0];
     
-    res.status(201).json(newPost);
+    res.status(201).json({
+      message: 'Post criado com sucesso',
+      data: newPost
+    });
     
   } catch (error) {
     console.error('Erro ao criar post:', error);
@@ -177,17 +216,19 @@ router.get('/id/:id', async (req, res) => {
 });
 
 // PUT /api/posts/:id - Editar post (requer JWT - apenas o autor)
-router.put('/:id', authenticateJWT, async (req, res) => {
+router.put('/:id', authenticateJWT, uploadSingleImage, handleUploadError, async (req, res) => {
   try {
     const { id } = req.params;
-    const { title, slug, content, cover_image, status } = req.body;
+    const { title, slug, content, status } = req.body;
     const currentUserId = req.user.userId; 
+    let cover_image_url = null;
     
-    if (!title && !slug && !content && !cover_image && !status) {
+    if (!title && !slug && !content && !status && !req.file) {
       return res.status(400).json({ 
         error: 'Pelo menos um campo deve ser fornecido para atualização' 
       });
     }
+
     
     if (status && !['draft', 'published', 'archived'].includes(status)) {
       return res.status(400).json({ 
@@ -199,20 +240,18 @@ router.put('/:id', authenticateJWT, async (req, res) => {
     
     const postExists = await pool.request()
       .input('id', sql.BigInt, id)
-      .query('SELECT id, author_id FROM posts WHERE id = @id');
+      .query('SELECT id, author_id, cover_image FROM posts WHERE id = @id');
     
     if (postExists.recordset.length === 0) {
       return res.status(404).json({ error: 'Post não encontrado' });
     }
     
-    
-    if (postExists.recordset[0].author_id !== currentUserId) {
+    if (Number(postExists.recordset[0].author_id) !== currentUserId) {
       return res.status(403).json({ 
         error: 'Acesso negado', 
         message: 'Você só pode editar seus próprios posts' 
       });
     }
-    
     if (slug) {
       const existingSlug = await pool.request()
         .input('slug', sql.NVarChar, slug)
@@ -222,6 +261,50 @@ router.put('/:id', authenticateJWT, async (req, res) => {
       if (existingSlug.recordset.length > 0) {
         return res.status(400).json({ 
           error: 'Este slug já está em uso' 
+        });
+      }
+    }
+    
+    if (req.file) {
+      // Validar arquivo de imagem
+      const { validateImageFile } = require('../utils/image-manager');
+      const validation = validateImageFile(req.file);
+      if (!validation.valid) {
+        return res.status(400).json({
+          error: 'Arquivo inválido',
+          message: validation.error
+        });
+      }
+
+      try {
+        const currentPost = postExists.recordset[0];
+        
+        if (currentPost.cover_image) {
+          const oldFileName = extractFileNameFromUrl(currentPost.cover_image);
+          
+          if (oldFileName) {
+            const deleteResult = await deleteImage(oldFileName);
+          }
+        }
+        
+        const uploadResult = await uploadImage(req.file.buffer, req.file.originalname, {
+          prefix: 'posts',
+          imageOptions: {
+            maxWidth: 1920,
+            maxHeight: 1080,
+            quality: 85,
+            format: 'jpeg'
+          }
+        });
+        
+        if (uploadResult.success) {
+          cover_image_url = uploadResult.publicUrl;
+        }
+      } catch (uploadError) {
+        console.error('Erro no upload da imagem:', uploadError);
+        return res.status(500).json({ 
+          error: 'Falha no upload da imagem',
+          message: 'Tente novamente ou envie uma imagem diferente'
         });
       }
     }
@@ -244,9 +327,9 @@ router.put('/:id', authenticateJWT, async (req, res) => {
       inputs.push({ name: 'content', type: sql.NVarChar, value: content.trim() });
     }
     
-    if (cover_image !== undefined) {
+    if (cover_image_url) {
       updateFields.push('cover_image = @cover_image');
-      inputs.push({ name: 'cover_image', type: sql.NVarChar, value: cover_image ? cover_image.trim() : null });
+      inputs.push({ name: 'cover_image', type: sql.NVarChar, value: cover_image_url });
     }
     
     if (status) {
@@ -271,9 +354,11 @@ router.put('/:id', authenticateJWT, async (req, res) => {
                INSERTED.author_id, INSERTED.status, INSERTED.created_at, INSERTED.updated_at
         WHERE id = @id
       `);
-    
-    console.log(result.recordset[0]);
-    res.json(result.recordset[0]);
+
+    res.json({
+      message: 'Post atualizado com sucesso',
+      data: result.recordset[0]
+    });
     
   } catch (error) {
     console.error('Erro ao atualizar post:', error);
@@ -349,5 +434,6 @@ router.patch('/:id/change-status', authenticateJWT, async (req, res) => {
     res.status(500).json({ error: 'Erro interno do servidor' });
   }
 });
+
 
 module.exports = router;

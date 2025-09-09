@@ -20,6 +20,7 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.884.0",
     "bcrypt": "^5.1.1",
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",
@@ -27,6 +28,8 @@
     "helmet": "^7.1.0",
     "jsonwebtoken": "^9.0.2",
     "mssql": "^10.0.1",
+    "multer": "^2.0.2",
+    "sharp": "^0.34.3",
     "swagger-jsdoc": "^6.2.8",
     "swagger-ui-express": "^5.0.0"
   },
