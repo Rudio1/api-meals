@@ -1,15 +1,18 @@
 const express = require('express');
 const router = express.Router();
 const { getConnection, sql } = require('../config/database');
+const { authenticateJWT } = require('../middleware/jwt-auth');
 
 
-router.post('/', async (req, res) => {
+// POST /api/posts - Criar novo post (requer JWT)
+router.post('/', authenticateJWT, async (req, res) => {
   try {
-    const { title, slug, content, cover_image, author_id, status = 'draft' } = req.body;
+    const { title, slug, content, cover_image, status = 'draft' } = req.body;
+    const author_id = req.user.userId; 
     
-    if (!title || !slug || !content || !author_id) {
+    if (!title || !slug || !content) {
       return res.status(400).json({ 
-        error: 'Título, slug, conteúdo e author_id são obrigatórios' 
+        error: 'Título, slug e conteúdo são obrigatórios' 
       });
     }
     
@@ -55,6 +58,7 @@ router.post('/', async (req, res) => {
   }
 });
 
+// GET /api/posts - Listar posts (com filtros opcionais)
 router.get('/', async (req, res) => {
   try {
     const { status, author_id, limit = 10, offset = 0 } = req.query;
@@ -112,6 +116,7 @@ router.get('/', async (req, res) => {
   }
 });
 
+// GET /api/posts/:slug - Buscar post por slug
 router.get('/:slug', async (req, res) => {
   try {
     const { slug } = req.params;
@@ -138,6 +143,7 @@ router.get('/:slug', async (req, res) => {
   }
 });
 
+// GET /api/posts/id/:id - Buscar post por ID
 router.get('/id/:id', async (req, res) => {
   try {
     const { id } = req.params;
@@ -170,12 +176,14 @@ router.get('/id/:id', async (req, res) => {
   }
 });
 
-router.put('/:id', async (req, res) => {
+// PUT /api/posts/:id - Editar post (requer JWT - apenas o autor)
+router.put('/:id', authenticateJWT, async (req, res) => {
   try {
     const { id } = req.params;
-    const { title, slug, content, cover_image, author_id, status } = req.body;
+    const { title, slug, content, cover_image, status } = req.body;
+    const currentUserId = req.user.userId; 
     
-    if (!title && !slug && !content && !cover_image && !author_id && !status) {
+    if (!title && !slug && !content && !cover_image && !status) {
       return res.status(400).json({ 
         error: 'Pelo menos um campo deve ser fornecido para atualização' 
       });
@@ -191,10 +199,18 @@ router.put('/:id', async (req, res) => {
     
     const postExists = await pool.request()
       .input('id', sql.BigInt, id)
-      .query('SELECT id FROM posts WHERE id = @id');
+      .query('SELECT id, author_id FROM posts WHERE id = @id');
     
     if (postExists.recordset.length === 0) {
       return res.status(404).json({ error: 'Post não encontrado' });
+    }
+    
+    
+    if (postExists.recordset[0].author_id !== currentUserId) {
+      return res.status(403).json({ 
+        error: 'Acesso negado', 
+        message: 'Você só pode editar seus próprios posts' 
+      });
     }
     
     if (slug) {
@@ -233,11 +249,6 @@ router.put('/:id', async (req, res) => {
       inputs.push({ name: 'cover_image', type: sql.NVarChar, value: cover_image ? cover_image.trim() : null });
     }
     
-    if (author_id) {
-      updateFields.push('author_id = @author_id');
-      inputs.push({ name: 'author_id', type: sql.BigInt, value: author_id });
-    }
-    
     if (status) {
       updateFields.push('status = @status');
       inputs.push({ name: 'status', type: sql.NVarChar, value: status });
@@ -261,6 +272,7 @@ router.put('/:id', async (req, res) => {
         WHERE id = @id
       `);
     
+    console.log(result.recordset[0]);
     res.json(result.recordset[0]);
     
   } catch (error) {
@@ -269,10 +281,12 @@ router.put('/:id', async (req, res) => {
   }
 });
 
-router.patch('/:id/change-status', async (req, res) => {
+// PATCH /api/posts/:id/change-status - Alterar status do post (requer JWT - apenas o autor)
+router.patch('/:id/change-status', authenticateJWT, async (req, res) => {
   try {
     const { id } = req.params;
     const { status } = req.body;
+    const currentUserId = req.user.userId; 
     
     if (!status) {
       return res.status(400).json({ 
@@ -290,10 +304,18 @@ router.patch('/:id/change-status', async (req, res) => {
     
     const postExists = await pool.request()
       .input('id', sql.BigInt, id)
-      .query('SELECT id, status FROM posts WHERE id = @id');
+      .query('SELECT id, status, author_id FROM posts WHERE id = @id');
     
     if (postExists.recordset.length === 0) {
       return res.status(404).json({ error: 'Post não encontrado' });
+    }
+    
+    
+    if (postExists.recordset[0].author_id !== currentUserId) {
+      return res.status(403).json({ 
+        error: 'Acesso negado', 
+        message: 'Você só pode alterar o status dos seus próprios posts' 
+      });
     }
     
     const currentPost = postExists.recordset[0];

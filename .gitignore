@@ -93,3 +93,6 @@ jspm_packages/
 Thumbs.db
 
 table_Schema.txt
+
+/.cursor
+.cursorrules

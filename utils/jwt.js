@@ -8,7 +8,11 @@ const jwt = require('jsonwebtoken');
 const generateAccessToken = (payload) => {
   const tokenPayload = typeof payload === 'number' ? { userId: payload } : payload;
   
-  const expiresIn = process.env.JWT_ACCESS_EXPIRES_IN || '1h';
+  let expiresIn = process.env.JWT_ACCESS_EXPIRES_IN || '7d';
+  
+  if (!isNaN(expiresIn)) {
+    expiresIn = parseInt(expiresIn);
+  }
   
   return jwt.sign(tokenPayload, process.env.JWT_SECRET, {
     expiresIn: expiresIn
@@ -23,7 +27,11 @@ const generateAccessToken = (payload) => {
 const generateRefreshToken = (payload) => {
   const tokenPayload = typeof payload === 'number' ? { userId: payload } : payload;
   
-  const expiresIn = process.env.JWT_REFRESH_EXPIRES_IN || '7d';
+  let expiresIn = process.env.JWT_REFRESH_EXPIRES_IN || '7d';
+  
+  if (!isNaN(expiresIn)) {
+    expiresIn = parseInt(expiresIn);
+  }
   
   return jwt.sign(tokenPayload, process.env.JWT_SECRET, {
     expiresIn: expiresIn

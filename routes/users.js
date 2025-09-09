@@ -101,7 +101,7 @@ router.post('/login', async (req, res) => {
       tokens: {
         access_token: accessToken,
         refresh_token: refreshToken,
-        expires_in: 3600 // 1 hora
+        expires_in: process.env.JWT_ACCESS_EXPIRES_IN
       }
     });
     
@@ -134,7 +134,7 @@ router.post('/refresh-token', async (req, res) => {
     res.json({
       message: 'Token renovado com sucesso',
       access_token: newAccessToken,
-      expires_in: 3600
+      expires_in: process.env.JWT_ACCESS_EXPIRES_IN
     });
     
   } catch (error) {
