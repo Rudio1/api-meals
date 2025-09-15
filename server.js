@@ -13,6 +13,7 @@ const measurementUnitsRouter = require('./routes/measurement-units');
 const postsRouter = require('./routes/blogs');
 const commentsRouter = require('./routes/comments');
 const commentRepliesRouter = require('./routes/comment-replies');
+const contactsRouter = require('./routes/contacts');
   
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -82,6 +83,7 @@ app.get('/', (req, res) => {
       posts: '/api/posts',
       comments: '/api/comments',
       commentReplies: '/api/comment-replies',
+      contacts: '/api/contacts',
       swagger: '/api-docs'
     },
     note: 'Todas as rotas da API requerem o header x-api-key'
@@ -96,6 +98,7 @@ app.use('/api/measurement-units', measurementUnitsRouter);
 app.use('/api/posts', postsRouter);
 app.use('/api/comments', commentsRouter);
 app.use('/api/comment-replies', commentRepliesRouter);
+app.use('/api/contacts', contactsRouter);
 
 app.use('/api-docs', authenticateApiKey, swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
@@ -134,6 +137,7 @@ app.listen(PORT, () => {
   console.log(`Posts: http://localhost:${PORT}/api/posts`);
   console.log(`Comentários: http://localhost:${PORT}/api/comments`);
   console.log(`Respostas: http://localhost:${PORT}/api/comment-replies`);
+  console.log(`Contatos: http://localhost:${PORT}/api/contacts`);
   console.log(`Todas as rotas da API requerem o header x-api-key`);
 });
 

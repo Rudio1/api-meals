@@ -9,6 +9,7 @@ const usersRouter = require('../routes/users');
 const mealTypesRouter = require('../routes/meal-types');
 const mealsRouter = require('../routes/meals');
 const postsRouter = require('../routes/blogs');
+const contactsRouter = require('../routes/contacts');
 
 const app = express();
 
@@ -68,6 +69,7 @@ app.get('/', (req, res) => {
       mealTypes: '/api/meal-types',
       meals: '/api/meals',
       posts: '/api/posts',
+      contacts: '/api/contacts',
       swagger: '/api-docs'
     },
     note: 'Todas as rotas da API requerem o header x-api-key'
@@ -81,6 +83,7 @@ app.use('/api/users', usersRouter);
 app.use('/api/meal-types', mealTypesRouter);
 app.use('/api/meals', mealsRouter);
 app.use('/api/posts', postsRouter);
+app.use('/api/contacts', contactsRouter);
 app.use('/api-docs', authenticateApiKey, swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 app.use((err, req, res, next) => {
